@@ -1,0 +1,595 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  ArrowLeft, 
+  BookOpen, 
+  Check,
+  ChevronLeft, 
+  Columns, 
+  Edit3, 
+  Layout, 
+  Maximize2, 
+  Moon, 
+  Music, 
+  PlayCircle, 
+  Plus, 
+  RotateCcw, 
+  Settings, 
+  Sun, 
+  Trash2, 
+  Type, 
+  X 
+} from 'lucide-react';
+
+// --- DEMO DATA ---
+const DEMO_DATA = [
+  {
+    id: "demo-1",
+    title: "La Vie en rose",
+    artist: "Édith Piaf",
+    year: "1947",
+    lang: "French",
+    original: "Des yeux qui font baisser les miens\nUn rire qui se perd sur sa bouche\nVoilà le portrait sans retouche\nDe l'homme auquel j'appartiens",
+    translation: "Eyes that make mine look down\nA laugh that gets lost on his mouth\nHere is the portrait without retouching\nOf the man to whom I belong"
+  },
+  {
+    id: "demo-2",
+    title: "Historia de un Amor",
+    artist: "Guadalupe Pineda",
+    year: "1955",
+    lang: "Spanish",
+    original: "Ya no estás más a mi lado, corazón\nEn el alma sólo tengo soledad\nY si ya no puedo verte\nPorque Dios me hizo quererte\nPara hacerme sufrir más",
+    translation: "You are no longer by my side, my heart\nIn my soul I have only loneliness\nAnd if I can no longer see you\nBecause God made me love you\nTo make me suffer more"
+  }
+];
+
+// --- APP COMPONENT ---
+export default function App() {
+  // Data State
+  const [songs, setSongs] = useState([]);
+  const [activeSongId, setActiveSongId] = useState(null);
+  const [view, setView] = useState('library'); 
+  const [editingId, setEditingId] = useState(null);
+
+  // Appearance State
+  const [preferences, setPreferences] = useState({
+    theme: 'system', // 'light', 'dark', 'system'
+    fontSize: 'medium', // 'small', 'medium', 'large'
+    fontStyle: 'serif', // 'serif', 'sans'
+  });
+
+  // --- PERSISTENCE & THEME ---
+  
+  // Load initial data
+  useEffect(() => {
+    const savedSongs = localStorage.getItem('lyrical_library_v1');
+    const savedPrefs = localStorage.getItem('lyrical_prefs_v1');
+    
+    if (savedSongs) setSongs(JSON.parse(savedSongs));
+    else setSongs(DEMO_DATA);
+
+    if (savedPrefs) setPreferences(JSON.parse(savedPrefs));
+  }, []);
+
+  // Save on change
+  useEffect(() => {
+    if (songs.length > 0) localStorage.setItem('lyrical_library_v1', JSON.stringify(songs));
+    localStorage.setItem('lyrical_prefs_v1', JSON.stringify(preferences));
+  }, [songs, preferences]);
+
+  // Apply Theme Logic
+  useEffect(() => {
+    const root = window.document.documentElement;
+    const isDark = 
+      preferences.theme === 'dark' || 
+      (preferences.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    
+    if (isDark) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [preferences.theme]);
+
+  // --- ACTIONS ---
+  const handleSaveSong = (songData) => {
+    if (editingId) {
+      setSongs(songs.map(s => s.id === editingId ? { ...songData, id: editingId } : s));
+    } else {
+      const newSong = { ...songData, id: crypto.randomUUID() };
+      setSongs([newSong, ...songs]);
+    }
+    setView('library');
+    setEditingId(null);
+  };
+
+  const handleDeleteSong = (id) => {
+    if (window.confirm("Are you sure you want to delete this song?")) {
+      setSongs(songs.filter(s => s.id !== id));
+      if (activeSongId === id) {
+        setActiveSongId(null);
+        setView('library');
+      }
+    }
+  };
+
+  const activeSong = songs.find(s => s.id === activeSongId);
+
+  // Helper to inject prefs into views
+  const viewProps = { preferences, setPreferences };
+
+  return (
+    <div className={`min-h-screen transition-colors duration-300 bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 font-sans`}>
+      
+      {view === 'library' && (
+        <LibraryView 
+          songs={songs} 
+          onSelect={(id) => { setActiveSongId(id); setView('player'); }} 
+          onAdd={() => { setEditingId(null); setView('editor'); }}
+          onSettings={() => setView('settings')}
+        />
+      )}
+
+      {view === 'player' && activeSong && (
+        <PlayerView 
+          song={activeSong} 
+          onBack={() => setView('library')}
+          onEdit={() => { setEditingId(activeSong.id); setView('editor'); }}
+          {...viewProps}
+        />
+      )}
+
+      {view === 'editor' && (
+        <EditorView 
+          initialData={editingId ? songs.find(s => s.id === editingId) : null}
+          onSave={handleSaveSong}
+          onCancel={() => setView(editingId ? 'player' : 'library')} 
+          onDelete={editingId ? () => handleDeleteSong(editingId) : null}
+        />
+      )}
+
+      {view === 'settings' && (
+         <SettingsView 
+           onBack={() => setView('library')}
+           onReset={() => {
+             if(window.confirm("Reset all data to demo?")) {
+               setSongs(DEMO_DATA);
+               setView('library');
+             }
+           }}
+           {...viewProps}
+         />
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// VIEW 1: LIBRARY
+// ==========================================
+function LibraryView({ songs, onSelect, onAdd, onSettings }) {
+  const [filter, setFilter] = useState('');
+
+  const filtered = songs.filter(s => 
+    s.title.toLowerCase().includes(filter.toLowerCase()) || 
+    s.artist.toLowerCase().includes(filter.toLowerCase())
+  );
+
+  return (
+    <div className="pb-24 animate-in fade-in duration-500 max-w-2xl mx-auto">
+      {/* Header */}
+      <div className="sticky top-0 z-20 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-md px-6 pt-12 pb-4 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-serif font-bold tracking-tight text-slate-900 dark:text-white">Library</h1>
+          <button onClick={onSettings} className="p-2 text-slate-500 hover:text-slate-900 dark:hover:text-white transition rounded-full hover:bg-slate-200 dark:hover:bg-slate-800">
+            <Settings className="w-6 h-6" />
+          </button>
+        </div>
+        
+        {/* Search */}
+        <input 
+          type="text" 
+          placeholder="Search collection..." 
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition shadow-sm"
+        />
+      </div>
+
+      {/* List */}
+      <div className="px-4 mt-6 space-y-3">
+        {filtered.length === 0 ? (
+          <div className="text-center py-20 text-slate-400">
+            <p>No songs found.</p>
+          </div>
+        ) : (
+          filtered.map(song => (
+            <div 
+              key={song.id}
+              onClick={() => onSelect(song.id)}
+              className="group relative bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 rounded-2xl flex items-center justify-between transition-all hover:shadow-md cursor-pointer active:scale-[0.99]"
+            >
+              <div className="flex-1 pr-4">
+                <h3 className="font-semibold text-lg text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">{song.title}</h3>
+                <p className="text-sm text-slate-500 dark:text-slate-400">{song.artist}</p>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                 <span className="text-[10px] uppercase font-bold tracking-widest bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-1 rounded-md">
+                   {song.lang}
+                 </span>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <button 
+        onClick={onAdd}
+        className="fixed bottom-8 right-6 w-14 h-14 bg-indigo-600 hover:bg-indigo-500 text-white rounded-full shadow-lg shadow-indigo-900/20 flex items-center justify-center transition active:scale-95 z-30"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+    </div>
+  );
+}
+
+// ==========================================
+// VIEW 2: PLAYER
+// ==========================================
+function PlayerView({ song, onBack, onEdit, preferences }) {
+  const [mode, setMode] = useState('focus'); // focus, split, ruby, cinema, flashcard
+  
+  // Font Size Logic
+  const sizeClass = {
+    small: 'text-base',
+    medium: 'text-xl',
+    large: 'text-2xl'
+  }[preferences.fontSize];
+
+  // Font Family Logic
+  const fontClass = preferences.fontStyle === 'serif' ? 'font-serif' : 'font-sans tracking-wide';
+
+  const lines = React.useMemo(() => {
+    const originals = song.original.split('\n').filter(l => l.trim());
+    const translations = song.translation.split('\n').filter(l => l.trim());
+    return originals.map((o, i) => ({ o, t: translations[i] || "" }));
+  }, [song]);
+
+  return (
+    <div className={`min-h-screen flex flex-col ${mode === 'cinema' ? 'bg-black text-white' : ''}`}>
+      
+      {/* Navbar */}
+      <div className={`sticky top-0 z-20 flex justify-between items-center px-4 py-3 transition-colors ${mode === 'cinema' ? 'bg-transparent' : 'bg-slate-50/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-200 dark:border-slate-800'}`}>
+        <button onClick={onBack} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+          <ChevronLeft className={`w-6 h-6 ${mode === 'cinema' ? 'text-white/50 hover:text-white' : ''}`} />
+        </button>
+        
+        <div className="flex gap-2">
+           <button onClick={() => setMode(mode === 'cinema' ? 'focus' : 'cinema')} className={`p-2 rounded-full transition ${mode === 'cinema' ? 'text-indigo-400' : 'hover:bg-slate-200 dark:hover:bg-slate-800'}`}>
+             <Maximize2 className="w-5 h-5" />
+           </button>
+           <button onClick={onEdit} className={`p-2 rounded-full transition ${mode === 'cinema' ? 'hidden' : 'hover:bg-slate-200 dark:hover:bg-slate-800'}`}>
+             <Edit3 className="w-5 h-5" />
+           </button>
+        </div>
+      </div>
+
+      {/* Mode Select */}
+      {mode !== 'cinema' && (
+        <div className="px-4 py-2 overflow-x-auto no-scrollbar border-b border-slate-200/50 dark:border-slate-800/50">
+          <div className="flex gap-2 w-max mx-auto">
+             <ModeChip label="Focus" active={mode === 'focus'} onClick={() => setMode('focus')} icon={BookOpen} />
+             <ModeChip label="Split" active={mode === 'split'} onClick={() => setMode('split')} icon={Columns} />
+             <ModeChip label="Ruby" active={mode === 'ruby'} onClick={() => setMode('ruby')} icon={Type} />
+             <ModeChip label="Cards" active={mode === 'flashcard'} onClick={() => setMode('flashcard')} icon={Layout} />
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto px-4 py-8 max-w-2xl mx-auto w-full">
+        
+        <div className={`text-center mb-10 transition-opacity duration-500 ${mode === 'cinema' ? 'opacity-50' : 'opacity-100'}`}>
+          <h2 className="text-2xl font-serif font-bold mb-2">{song.title}</h2>
+          <p className="text-sm font-medium tracking-wide uppercase text-indigo-600 dark:text-indigo-400">{song.artist}</p>
+        </div>
+
+        {/* --- MODES --- */}
+        
+        {mode === 'focus' && (
+          <div className="space-y-6">
+            {lines.map((line, i) => (
+              <FocusLine key={i} line={line} fontClass={fontClass} sizeClass={sizeClass} />
+            ))}
+          </div>
+        )}
+
+        {mode === 'split' && (
+          <div className="space-y-4 divide-y divide-slate-200 dark:divide-slate-800">
+            {lines.map((line, i) => (
+              <div key={i} className="grid grid-cols-2 gap-6 py-4 items-start">
+                <p className={`${fontClass} ${sizeClass} leading-relaxed text-slate-900 dark:text-slate-100`}>{line.o}</p>
+                <p className={`text-sm italic text-slate-500 dark:text-slate-400 leading-relaxed pt-1`}>{line.t}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {mode === 'ruby' && (
+          <div className="space-y-6">
+             {lines.map((line, i) => (
+              <div key={i} className="py-2">
+                <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70 mb-0.5 select-none font-medium">{line.t}</p>
+                <p className={`${fontClass} ${sizeClass} text-slate-900 dark:text-slate-100`}>{line.o}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {mode === 'cinema' && (
+          <div className="space-y-16 py-10 text-center max-w-lg mx-auto">
+            {lines.map((line, i) => (
+               <div key={i} className="group cursor-default">
+                 <p className={`${fontClass} text-3xl text-slate-300 group-hover:text-white transition-colors duration-500 leading-relaxed`}>{line.o}</p>
+                 <p className="mt-4 text-sm text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity duration-500">{line.t}</p>
+               </div>
+            ))}
+          </div>
+        )}
+
+        {mode === 'flashcard' && <FlashcardDeck lines={lines} />}
+
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// VIEW 3: SETTINGS (NEW!)
+// ==========================================
+function SettingsView({ onBack, onReset, preferences, setPreferences }) {
+  
+  const update = (key, val) => setPreferences(prev => ({ ...prev, [key]: val }));
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-6 pt-12 max-w-2xl mx-auto">
+      <div className="flex items-center gap-4 mb-8">
+        <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+            <ArrowLeft className="w-6 h-6"/>
+        </button>
+        <h1 className="text-2xl font-bold">Display Settings</h1>
+      </div>
+
+      <div className="space-y-8">
+        
+        {/* Section: Theme */}
+        <section>
+            <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4 ml-1">Appearance</h3>
+            <div className="grid grid-cols-3 gap-3">
+                <SettingBtn 
+                    label="Light" 
+                    icon={Sun} 
+                    active={preferences.theme === 'light'} 
+                    onClick={() => update('theme', 'light')} 
+                />
+                <SettingBtn 
+                    label="Dark" 
+                    icon={Moon} 
+                    active={preferences.theme === 'dark'} 
+                    onClick={() => update('theme', 'dark')} 
+                />
+                <SettingBtn 
+                    label="Auto" 
+                    icon={Layout} 
+                    active={preferences.theme === 'system'} 
+                    onClick={() => update('theme', 'system')} 
+                />
+            </div>
+        </section>
+
+        {/* Section: Typography */}
+        <section>
+            <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4 ml-1">Typography</h3>
+            
+            <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
+                
+                {/* Font Size */}
+                <div className="flex justify-between items-center">
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">Text Size</span>
+                    <div className="flex gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                        {['small', 'medium', 'large'].map(s => (
+                            <button
+                                key={s}
+                                onClick={() => update('fontSize', s)}
+                                className={`px-3 py-1 rounded-md text-sm capitalize transition ${preferences.fontSize === s ? 'bg-white dark:bg-slate-600 shadow-sm font-bold' : 'text-slate-500'}`}
+                            >
+                                {s}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Font Style */}
+                <div className="flex justify-between items-center">
+                    <span className="text-slate-700 dark:text-slate-300 font-medium">Font Style</span>
+                    <div className="flex gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg">
+                         <button
+                            onClick={() => update('fontStyle', 'serif')}
+                            className={`px-3 py-1 rounded-md text-sm transition font-serif ${preferences.fontStyle === 'serif' ? 'bg-white dark:bg-slate-600 shadow-sm font-bold' : 'text-slate-500'}`}
+                        >
+                            Serif
+                        </button>
+                        <button
+                            onClick={() => update('fontStyle', 'sans')}
+                            className={`px-3 py-1 rounded-md text-sm transition font-sans ${preferences.fontStyle === 'sans' ? 'bg-white dark:bg-slate-600 shadow-sm font-bold' : 'text-slate-500'}`}
+                        >
+                            Sans
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        {/* Section: Data */}
+        <section>
+            <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 mb-4 ml-1">Data</h3>
+            <div className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800">
+                <button 
+                onClick={onReset}
+                className="w-full flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition text-red-500"
+                >
+                <span className="font-medium">Reset Library to Demo</span>
+                <RotateCcw className="w-5 h-5" />
+                </button>
+            </div>
+        </section>
+
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// EDITOR VIEW
+// ==========================================
+function EditorView({ initialData, onSave, onCancel, onDelete }) {
+  const [formData, setFormData] = useState(initialData || {
+    title: '', artist: '', year: '', lang: '', original: '', translation: ''
+  });
+
+  const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
+
+  return (
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 p-4 pb-20 overflow-y-auto">
+      <div className="flex justify-between items-center mb-8 pt-4 sticky top-0 bg-slate-50 dark:bg-slate-950 z-10 py-4 border-b border-slate-200 dark:border-slate-800">
+        <button onClick={onCancel} className="text-slate-500 hover:text-slate-900 dark:hover:text-white">Cancel</button>
+        <h2 className="font-bold">Edit Lyrics</h2>
+        <button onClick={() => onSave(formData)} className="text-indigo-600 dark:text-indigo-400 font-bold">Save</button>
+      </div>
+
+      <div className="space-y-6 max-w-xl mx-auto">
+        <div className="grid grid-cols-2 gap-4">
+          <InputGroup label="Title" value={formData.title} onChange={v => handleChange('title', v)} placeholder="Song Name" />
+          <InputGroup label="Artist" value={formData.artist} onChange={v => handleChange('artist', v)} placeholder="Artist Name" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <InputGroup label="Year" value={formData.year} onChange={v => handleChange('year', v)} placeholder="1955" />
+          <InputGroup label="Language" value={formData.lang} onChange={v => handleChange('lang', v)} placeholder="French" />
+        </div>
+
+        <div>
+            <label className="block text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">Original</label>
+            <textarea 
+                className="w-full h-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 font-serif focus:outline-none focus:border-indigo-500 transition resize-none shadow-sm"
+                value={formData.original}
+                onChange={e => handleChange('original', e.target.value)}
+                placeholder="Paste original text..."
+            />
+        </div>
+        <div>
+            <label className="block text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">Translation</label>
+            <textarea 
+                className="w-full h-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 focus:outline-none focus:border-indigo-500 transition resize-none shadow-sm"
+                value={formData.translation}
+                onChange={e => handleChange('translation', e.target.value)}
+                placeholder="Paste translation..."
+            />
+        </div>
+
+        {onDelete && (
+          <button onClick={onDelete} className="w-full py-4 mt-8 flex items-center justify-center gap-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-xl transition border border-red-200 dark:border-red-900/30">
+            <Trash2 className="w-4 h-4" /> Delete Song
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// HELPERS
+// ==========================================
+
+function FocusLine({ line, fontClass, sizeClass }) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div onClick={() => setRevealed(!revealed)} className="cursor-pointer group">
+       <p className={`${fontClass} ${sizeClass} leading-relaxed transition-colors duration-200 ${revealed ? 'text-indigo-700 dark:text-indigo-300' : 'text-slate-800 dark:text-slate-200'}`}>
+         {line.o}
+       </p>
+       <div className={`overflow-hidden transition-all duration-300 ease-out ${revealed ? 'max-h-24 opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+         <p className="text-sm text-slate-500 dark:text-slate-400 italic pl-4 border-l-2 border-indigo-500/30">{line.t}</p>
+       </div>
+    </div>
+  );
+}
+
+function FlashcardDeck({ lines }) {
+  const [index, setIndex] = useState(0);
+  const [flipped, setFlipped] = useState(false);
+  const current = lines[index];
+
+  return (
+    <div className="h-[60vh] flex flex-col items-center justify-center">
+       <div 
+         onClick={() => setFlipped(!flipped)}
+         className="w-full max-w-sm aspect-[4/3] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 flex items-center justify-center text-center cursor-pointer shadow-xl relative"
+       >
+         <div className="absolute top-4 right-4 text-xs text-slate-400 font-mono">{index + 1} / {lines.length}</div>
+         <div className="animate-in fade-in zoom-in duration-300">
+           {flipped ? (
+             <p className="text-indigo-600 dark:text-indigo-400 font-medium text-lg italic">{current.t}</p>
+           ) : (
+             <p className="font-serif text-2xl text-slate-900 dark:text-white">{current.o}</p>
+           )}
+         </div>
+         <div className="absolute bottom-4 text-[10px] text-slate-400 uppercase tracking-widest">Tap to flip</div>
+       </div>
+
+       <div className="flex gap-8 mt-8">
+         <button disabled={index === 0} onClick={() => { setIndex(i => i - 1); setFlipped(false); }} className="p-4 rounded-full bg-white dark:bg-slate-800 shadow-lg disabled:opacity-50 text-slate-900 dark:text-white">
+           <ChevronLeft className="w-6 h-6" />
+         </button>
+         <button disabled={index === lines.length - 1} onClick={() => { setIndex(i => i + 1); setFlipped(false); }} className="p-4 rounded-full bg-indigo-600 shadow-lg shadow-indigo-500/30 disabled:opacity-50 text-white">
+           <PlayCircle className="w-6 h-6" />
+         </button>
+       </div>
+    </div>
+  );
+}
+
+function SettingBtn({ label, icon: Icon, active, onClick }) {
+    return (
+        <button 
+            onClick={onClick}
+            className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition-all duration-200
+            ${active 
+                ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-500 text-indigo-700 dark:text-indigo-300' 
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 hover:border-slate-300'}`}
+        >
+            <Icon className="w-6 h-6" />
+            <span className="text-xs font-bold">{label}</span>
+        </button>
+    )
+}
+
+function ModeChip({ label, active, onClick, icon: Icon }) {
+  return (
+    <button onClick={onClick} className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-bold uppercase tracking-wider transition-all border ${active ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500'}`}>
+      <Icon className="w-3 h-3" />
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function InputGroup({ label, value, onChange, placeholder }) {
+  return (
+    <div>
+      <label className="block text-xs uppercase tracking-wider text-slate-500 font-bold mb-1.5">{label}</label>
+      <input 
+        type="text" value={value} onChange={e => onChange(e.target.value)}
+        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg py-3 px-3 text-sm focus:outline-none focus:border-indigo-500 transition shadow-sm"
+        placeholder={placeholder}
+      />
+    </div>
+  );
+}
