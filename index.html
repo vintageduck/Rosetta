@@ -5,10 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Lyrical</title>
     
-    <!-- 1. Load Tailwind CSS (Styling) -->
+    <!-- 1. Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- 2. Configure Tailwind Theme -->
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -19,72 +17,71 @@
                         serif: ['Georgia', 'Cambria', 'Times New Roman', 'Times', 'serif'],
                     },
                     colors: {
-                        slate: {
-                            950: '#020617', // Custom darker slate for OLED feel
-                        }
+                        slate: { 950: '#020617' }
                     }
                 }
             }
         }
     </script>
 
-    <!-- 3. Load React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    
-    <!-- 4. Load Babel (To compile React in the browser) -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- 2. React & Babel -->
+    <script crossorigin="anonymous" src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin="anonymous" src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <style>
-        /* Custom scrollbar hiding */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        /* Smooth transitions */
-        body { transition: background-color 0.3s, color 0.3s; }
-        /* Tap highlight removal for mobile */
-        * { -webkit-tap-highlight-color: transparent; }
+        body { -webkit-tap-highlight-color: transparent; }
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300">
     
-    <div id="root"></div>
+    <!-- Loading State / Mount Point -->
+    <div id="root" class="flex items-center justify-center min-h-screen text-slate-400">
+        <div class="text-center">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-slate-600 mx-auto mb-4"></div>
+            <p>Loading Lyrical...</p>
+        </div>
+    </div>
 
-    <!-- 5. THE APP LOGIC -->
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        // --- SAFE ID GENERATOR (Fixes iPhone crash) ---
+        const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-        // --- ICONS (SVG Components) ---
-        const Icon = ({ name, className, ...props }) => {
-            const icons = {
-                arrowLeft: <path d="M19 12H5m7 7l-7-7 7-7" strokeLinecap="round" strokeLinejoin="round"/>,
-                settings: <path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.1a2 2 0 01-1-1.72v-.51a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" strokeLinecap="round" strokeLinejoin="round"/><circle cx="12" cy="12" r="3" strokeLinecap="round" strokeLinejoin="round"/>,
-                plus: <path d="M5 12h14M12 5v14" strokeLinecap="round" strokeLinejoin="round"/>,
-                edit: <path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" strokeLinecap="round" strokeLinejoin="round"/>,
-                trash: <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" strokeLinecap="round" strokeLinejoin="round"/>,
-                maximize: <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" strokeLinecap="round" strokeLinejoin="round"/>,
-                book: <path d="M4 19.5A2.5 2.5 0 016.5 17H20M6.5 17A2.5 2.5 0 019 19.5v-15A2.5 2.5 0 016.5 2z" strokeLinecap="round" strokeLinejoin="round"/>,
-                columns: <path d="M12 3h7a2 2 0 012 2v14a2 2 0 01-2 2h-7m0-18H5a2 2 0 01-2 2v14a2 2 0 012 2h7m0-18v18" strokeLinecap="round" strokeLinejoin="round"/>,
-                type: <path d="M4 7V4h16v3M9 20h6M12 4v16" strokeLinecap="round" strokeLinejoin="round"/>,
-                layout: <rect x="3" y="3" width="18" height="18" rx="2" ry="2" strokeLinecap="round" strokeLinejoin="round"/><line x1="3" y1="9" x2="21" y2="9" strokeLinecap="round" strokeLinejoin="round"/><line x1="9" y1="21" x2="9" y2="9" strokeLinecap="round" strokeLinejoin="round"/>,
-                play: <circle cx="12" cy="12" r="10" strokeLinecap="round" strokeLinejoin="round"/><polygon points="10 8 16 12 10 16 10 8" strokeLinecap="round" strokeLinejoin="round"/>,
-                moon: <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" strokeLinecap="round" strokeLinejoin="round"/>,
-                sun: <circle cx="12" cy="12" r="5" strokeLinecap="round" strokeLinejoin="round"/><line x1="12" y1="1" x2="12" y2="3" strokeLinecap="round" strokeLinejoin="round"/><line x1="12" y1="21" x2="12" y2="23" strokeLinecap="round" strokeLinejoin="round"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" strokeLinecap="round" strokeLinejoin="round"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" strokeLinecap="round" strokeLinejoin="round"/><line x1="1" y1="12" x2="3" y2="12" strokeLinecap="round" strokeLinejoin="round"/><line x1="21" y1="12" x2="23" y2="12" strokeLinecap="round" strokeLinejoin="round"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" strokeLinecap="round" strokeLinejoin="round"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" strokeLinecap="round" strokeLinejoin="round"/>,
-                rotate: <path d="M1 4v6h6M23 20v-6h-6" strokeLinecap="round" strokeLinejoin="round"/><path d="M20.49 9A9 9 0 005.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 013.51 15" strokeLinecap="round" strokeLinejoin="round"/>
-            };
-
-            return (
-                <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="24" height="24" viewBox="0 0 24 24" 
-                    fill="none" stroke="currentColor" strokeWidth="2" 
-                    className={className} {...props}
-                >
-                    {icons[name] || <circle cx="12" cy="12" r="2"/>}
-                </svg>
-            );
+        // --- ICONS DATA (Fixed SVG syntax) ---
+        // Wrapped multi-path icons in <g> tags to fix syntax errors
+        const ICONS = {
+            arrowLeft: <path d="M19 12H5m7 7l-7-7 7-7" />,
+            settings: <g><path d="M12.22 2h-.44a2 2 0 00-2 2v.18a2 2 0 01-1 1.73l-.43.25a2 2 0 01-2 0l-.15-.08a2 2 0 00-2.73.73l-.22.38a2 2 0 00.73 2.73l.15.1a2 2 0 011 1.72v.51a2 2 0 01-1 1.74l-.15.09a2 2 0 00-.73 2.73l.22.38a2 2 0 002.73.73l.15-.08a2 2 0 012 0l.43.25a2 2 0 011 1.73V20a2 2 0 002 2h.44a2 2 0 002-2v-.18a2 2 0 011-1.73l.43-.25a2 2 0 012 0l.15.08a2 2 0 002.73-.73l.22-.39a2 2 0 00-.73-2.73l-.15-.1a2 2 0 01-1-1.72v-.51a2 2 0 011-1.74l.15-.09a2 2 0 00.73-2.73l-.22-.38a2 2 0 00-2.73-.73l-.15.08a2 2 0 01-2 0l-.43-.25a2 2 0 01-1-1.73V4a2 2 0 00-2-2z" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="12" r="3" /></g>,
+            plus: <path d="M5 12h14M12 5v14" />,
+            edit: <g><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></g>,
+            trash: <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />,
+            maximize: <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />,
+            book: <g><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" /><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" /></g>,
+            columns: <path d="M12 3h7a2 2 0 012 2v14a2 2 0 01-2 2h-7m0-18H5a2 2 0 01-2 2v14a2 2 0 012 2h7m0-18v18" />,
+            type: <path d="M4 7V4h16v3M9 20h6M12 4v16" />,
+            layout: <g><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></g>,
+            play: <polygon points="5 3 19 12 5 21 5 3" />,
+            moon: <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />,
+            sun: <g><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></g>,
+            rotate: <g><path d="M1 4v6h6" /><path d="M3.51 15a9 9 0 102.13-9.36L1 10" /></g>
         };
 
-        // --- DEMO DATA ---
+        const Icon = ({ name, className }) => (
+            <svg 
+                xmlns="http://www.w3.org/2000/svg" 
+                width="24" height="24" viewBox="0 0 24 24" 
+                fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                className={className}
+            >
+                {ICONS[name] || <circle cx="12" cy="12" r="2" />}
+            </svg>
+        );
+
+        // --- MAIN APP ---
+        const { useState, useEffect, useMemo } = React;
+
         const DEMO_DATA = [
             {
                 id: "demo-1",
@@ -106,52 +103,46 @@
             }
         ];
 
-        // --- MAIN APP COMPONENT ---
         function App() {
-            // State
             const [songs, setSongs] = useState([]);
             const [activeSongId, setActiveSongId] = useState(null);
             const [view, setView] = useState('library'); 
             const [editingId, setEditingId] = useState(null);
-            
-            const [preferences, setPreferences] = useState({
-                theme: 'system',
-                fontSize: 'medium',
-                fontStyle: 'serif',
-            });
+            const [preferences, setPreferences] = useState({ theme: 'system', fontSize: 'medium', fontStyle: 'serif' });
 
-            // Initialize Data
+            // Initialize
             useEffect(() => {
-                const savedSongs = localStorage.getItem('lyrical_library_v1');
-                const savedPrefs = localStorage.getItem('lyrical_prefs_v1');
-                
-                if (savedSongs) setSongs(JSON.parse(savedSongs));
-                else setSongs(DEMO_DATA);
-
-                if (savedPrefs) setPreferences(JSON.parse(savedPrefs));
+                try {
+                    const savedSongs = localStorage.getItem('lyrical_library_v1');
+                    const savedPrefs = localStorage.getItem('lyrical_prefs_v1');
+                    if (savedSongs) setSongs(JSON.parse(savedSongs));
+                    else setSongs(DEMO_DATA);
+                    if (savedPrefs) setPreferences(JSON.parse(savedPrefs));
+                } catch (e) {
+                    console.error("Storage Error", e);
+                    setSongs(DEMO_DATA);
+                }
             }, []);
 
-            // Save Data
+            // Save
             useEffect(() => {
                 if (songs.length > 0) localStorage.setItem('lyrical_library_v1', JSON.stringify(songs));
                 localStorage.setItem('lyrical_prefs_v1', JSON.stringify(preferences));
             }, [songs, preferences]);
 
-            // Theme Effect
+            // Theme
             useEffect(() => {
                 const root = window.document.documentElement;
-                const isDark = preferences.theme === 'dark' || 
-                    (preferences.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+                const isDark = preferences.theme === 'dark' || (preferences.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
                 if (isDark) root.classList.add('dark');
                 else root.classList.remove('dark');
             }, [preferences.theme]);
 
-            // Handlers
             const handleSaveSong = (songData) => {
                 if (editingId) {
                     setSongs(songs.map(s => s.id === editingId ? { ...songData, id: editingId } : s));
                 } else {
-                    const newSong = { ...songData, id: crypto.randomUUID() };
+                    const newSong = { ...songData, id: generateId() };
                     setSongs([newSong, ...songs]);
                 }
                 setView('library');
@@ -170,7 +161,6 @@
 
             const activeSong = songs.find(s => s.id === activeSongId);
 
-            // Router
             return (
                 <div className="min-h-screen font-sans">
                     {view === 'library' && (
@@ -217,7 +207,6 @@
             );
         }
 
-        // --- COMPONENT: LIBRARY ---
         function LibraryView({ songs, onSelect, onAdd, onSettings }) {
             const [filter, setFilter] = useState('');
             const filtered = songs.filter(s => 
@@ -234,13 +223,8 @@
                                 <Icon name="settings" className="w-6 h-6" />
                             </button>
                         </div>
-                        <input 
-                            type="text" 
-                            placeholder="Search..." 
-                            value={filter}
-                            onChange={(e) => setFilter(e.target.value)}
-                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
-                        />
+                        <input type="text" placeholder="Search..." value={filter} onChange={(e) => setFilter(e.target.value)}
+                            className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl py-3 px-4 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition" />
                     </div>
 
                     <div className="px-4 mt-6 space-y-3">
@@ -269,11 +253,8 @@
             );
         }
 
-        // --- COMPONENT: PLAYER ---
         function PlayerView({ song, onBack, onEdit, preferences }) {
             const [mode, setMode] = useState('focus'); 
-            
-            // Preferences
             const sizeClass = { small: 'text-base', medium: 'text-xl', large: 'text-2xl' }[preferences.fontSize];
             const fontClass = preferences.fontStyle === 'serif' ? 'font-serif' : 'font-sans tracking-wide';
 
@@ -365,7 +346,6 @@
             );
         }
 
-        // --- COMPONENT: EDITOR ---
         function EditorView({ initialData, onSave, onCancel, onDelete }) {
             const [formData, setFormData] = useState(initialData || { title: '', artist: '', year: '', lang: '', original: '', translation: '' });
             const handleChange = (field, value) => setFormData(prev => ({ ...prev, [field]: value }));
@@ -389,7 +369,7 @@
                         </div>
                         <div>
                             <label className="block text-xs uppercase tracking-wider text-slate-500 font-bold mb-2">Original</label>
-                            <textarea className="w-full h-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 font-serif focus:outline-none focus:border-indigo-500 transition resize-none"
+                            <textarea className="w-full h-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 font-serif focus:outline-none focus:border-indigo-500 transition resize-none shadow-sm"
                                 value={formData.original} onChange={e => handleChange('original', e.target.value)} placeholder="Paste original text..." />
                         </div>
                         <div>
@@ -407,7 +387,6 @@
             );
         }
 
-        // --- COMPONENT: SETTINGS ---
         function SettingsView({ onBack, onReset, preferences, setPreferences }) {
             const update = (key, val) => setPreferences(prev => ({ ...prev, [key]: val }));
             return (
@@ -463,7 +442,6 @@
         }
 
         // --- SUB COMPONENTS ---
-
         function FocusLine({ line, fontClass, sizeClass }) {
             const [revealed, setRevealed] = useState(false);
             return (
@@ -522,8 +500,14 @@
             );
         }
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        // --- ERROR TRAP ---
+        try {
+            const root = ReactDOM.createRoot(document.getElementById('root'));
+            root.render(<App />);
+        } catch (err) {
+            document.body.innerHTML = '<div style="color:red; padding:20px; font-family:sans-serif;"><h1>App Crashed</h1><p>'+err.message+'</p></div>';
+            console.error(err);
+        }
     </script>
 </body>
 </html>
